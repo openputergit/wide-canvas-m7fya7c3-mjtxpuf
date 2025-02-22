@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CyberDetect AI - Object Detection Platform</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --neon-blue: #00f3ff;
+            --neon-pink: #ff00ff;
+            --cyber-black: #0a0a0f;
+        }
+
+        body {
+            font-family: 'Orbitron', sans-serif;
+            background-color: var(--cyber-black);
+            color: white;
+        }
+
+        .neon-text {
+            text-shadow: 0 0 10px var(--neon-blue),
+                         0 0 20px var(--neon-blue),
+                         0 0 30px var(--neon-blue);
+            animation: neon-pulse 2s infinite;
+        }
+
+        .neon-border {
+            border: 2px solid var(--neon-blue);
+            box-shadow: 0 0 10px var(--neon-blue),
+                       inset 0 0 10px var(--neon-blue);
+        }
+
+        .cyber-btn {
+            background: linear-gradient(45deg, #000, #111);
+            border: 2px solid var(--neon-blue);
+            box-shadow: 0 0 10px var(--neon-blue);
+            transition: all 0.3s ease;
+        }
+
+        .cyber-btn:hover {
+            background: var(--neon-blue);
+            color: black;
+            transform: translateY(-2px);
+            box-shadow: 0 0 20px var(--neon-blue);
+        }
+
+        @keyframes neon-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.8; }
+        }
+
+        .glitch {
+            animation: glitch 1s infinite;
+        }
+
+        @keyframes glitch {
+            2%, 64% { transform: translate(2px,0) skew(0deg); }
+            4%, 60% { transform: translate(-2px,0) skew(0deg); }
+            62% { transform: translate(0,0) skew(5deg); }
+        }
+
+        #videoContainer, #imageContainer {
+            position: relative;
+        }
+
+        .detection-box {
+            position: absolute;
+            border: 2px solid var(--neon-pink);
+            box-shadow: 0 0 10px var(--neon-pink);
+            pointer-events: none;
+        }
+
+        .loading {
+            width: 50px;
+            height: 50px;
+            border: 3px solid var(--neon-blue);
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Welcome Section -->
+    <div id="welcome" class="min-h-screen flex flex-col items-center justify-center p-4">
+        <h1 class="text-4xl md:text-6xl font-bold neon-text mb-8 text-center">CyberDetect AI</h1>
+        <p class="text-lg md:text-xl text-center mb-8 max-w-2xl">
+            Next-gen object detection powered by advanced AI. Real-time analysis, image processing, and video detection capabilities.
+        </p>
+        <button onclick="showDetection()" class="cyber-btn px-8 py-4 text-xl rounded-lg mb-8">
+            Get Started
+        </button>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8 w-full max-w-4xl">
+            <div class="neon-border p-6 rounded-lg text-center">
+                <i class="bi bi-camera-video text-3xl mb-4"></i>
+                <h3 class="text-xl mb-2">Real-Time Detection</h3>
+                <p>Live object detection through your webcam</p>
+            </div>
+            <div class="neon-border p-6 rounded-lg text-center">
+                <i class="bi bi-image text-3xl mb-4"></i>
+                <h3 class="text-xl mb-2">Image Analysis</h3>
+                <p>Upload and analyze static images</p>
+            </div>
+            <div class="neon-border p-6 rounded-lg text-center">
+                <i class="bi bi-film text-3xl mb-4"></i>
+                <h3 class="text-xl mb-2">Video Processing</h3>
+                <p>Process and analyze video content</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detection Section -->
+    <div id="detection" class="min-h-screen p-4 hidden">
+        <div class="container mx-auto">
+            <h2 class="text-3xl font-bold neon-text mb-8 text-center">Object Detection Interface</h2>
+            
+            <div class="flex flex-wrap gap-4 justify-center mb-8">
+                <button onclick="startRealTimeDetection()" class="cyber-btn px-6 py-3 rounded-lg">
+                    <i class="bi bi-camera-video mr-2"></i>Real-Time Detection
+                </button>
+                <button onclick="showImageUpload()" class="cyber-btn px-6 py-3 rounded-lg">
+                    <i class="bi bi-image mr-2"></i>Image Upload
+                </button>
+                <button onclick="showVideoUpload()" class="cyber-btn px-6 py-3 rounded-lg">
+                    <i class="bi bi-film mr-2"></i>Video Upload
+                </button>
+            </div>
+
+            <div id="status" class="text-center mb-4 text-lg neon-text"></div>
+
+            <div class="flex justify-center mb-8">
+                <div id="loadingIndicator" class="loading hidden"></div>
+            </div>
+
+            <div class="flex justify-center">
+                <div id="videoContainer" class="w-full max-w-3xl relative">
+                    <video id="webcam" class="w-full hidden" autoplay playsinline></video>
+                </div>
+                <div id="imageContainer" class="w-full max-w-3xl relative">
+                    <img id="uploadedImage" class="w-full hidden">
+                </div>
+            </div>
+
+            <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
+            <input type="file" id="videoInput" accept="video/*" class="hidden" onchange="handleVideoUpload(event)">
+        </div>
+    </div>
+
+    <script>
+        let model = null;
+        let isWebcamActive = false;
+
+        // Load the COCO-SSD model
+        async function loadModel() {
+            showLoading(true);
+            setStatus("Loading AI model...");
+            model = await cocoSsd.load();
+            setStatus("System Ready");
+            showLoading(false);
+        }
+
+        loadModel();
+
+        function showLoading(show) {
+            document.getElementById('loadingIndicator').style.display = show ? 'block' : 'none';
+        }
+
+        function setStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+
+        function showDetection() {
+            document.getElementById('welcome').classList.add('hidden');
+            document.getElementById('detection').classList.remove('hidden');
+        }
+
+        async function startRealTimeDetection() {
+            if (isWebcamActive) {
+                stopWebcam();
+                return;
+            }
+
+            const video = document.getElementById('webcam');
+            const videoContainer = document.getElementById('videoContainer');
+            
+            // Hide image container
+            document.getElementById('imageContainer').style.display = 'none';
+            videoContainer.style.display = 'block';
+            video.classList.remove('hidden');
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                isWebcamActive = true;
+
+                video.addEventListener('loadeddata', async function() {
+                    detectFrame(video);
+                });
+            } catch (error) {
+                setStatus("Error accessing webcam: " + error.message);
+            }
+        }
+
+        function stopWebcam() {
+            const video = document.getElementById('webcam');
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+            video.classList.add('hidden');
+            isWebcamActive = false;
+            clearDetections();
+        }
+
+        async function detectFrame(video) {
+            if (!isWebcamActive) return;
+
+            const predictions = await model.detect(video);
+            clearDetections();
+            drawDetections(predictions, video);
+            requestAnimationFrame(() => detectFrame(video));
+        }
+
+        function showImageUpload() {
+            stopWebcam();
+            document.getElementById('imageInput').click();
+        }
+
+        function showVideoUpload() {
+            stopWebcam();
+            document.getElementById('videoInput').click();
+        }
+
+        async function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const img = document.getElementById('uploadedImage');
+            const imageContainer = document.getElementById('imageContainer');
+            document.getElementById('videoContainer').style.display = 'none';
+            imageContainer.style.display = 'block';
+            img.classList.remove('hidden');
+
+            img.src = URL.createObjectURL(file);
+            img.onload = async () => {
+                showLoading(true);
+                setStatus("Analyzing image...");
+                const predictions = await model.detect(img);
+                clearDetections();
+                drawDetections(predictions, img);
+                setStatus("Analysis complete");
+                showLoading(false);
+            };
+        }
+
+        async function handleVideoUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const video = document.getElementById('webcam');
+            const videoContainer = document.getElementById('videoContainer');
+            document.getElementById('imageContainer').style.display = 'none';
+            videoContainer.style.display = 'block';
+            video.classList.remove('hidden');
+
+            video.src = URL.createObjectURL(file);
+            video.onloadeddata = async () => {
+                video.play();
+                detectFrame(video);
+            };
+        }
+
+        function clearDetections() {
+            const boxes = document.querySelectorAll('.detection-box');
+            boxes.forEach(box => box.remove());
+        }
+
+        function drawDetections(predictions, element) {
+            const container = element.parentElement;
+
+            predictions.forEach(prediction => {
+                const box = document.createElement('div');
+                box.className = 'detection-box';
+                
+                const scaleX = element.width / element.videoWidth || 1;
+                const scaleY = element.height / element.videoHeight || 1;
+
+                const [x, y, width, height] = prediction.bbox;
+                
+                box.style.left = `${x * scaleX}px`;
+                box.style.top = `${y * scaleY}px`;
+                box.style.width = `${width * scaleX}px`;
+                box.style.height = `${height * scaleY}px`;
+
+                const label = document.createElement('div');
+                label.textContent = `${prediction.class} ${Math.round(prediction.score * 100)}%`;
+                label.className = 'absolute top-0 left-0 bg-black text-white px-2 py-1 text-sm';
+                box.appendChild(label);
+
+                container.appendChild(box);
+            });
+        }
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
